@@ -7,34 +7,34 @@ import cdflib
 import netCDF4
 import warnings
 
-# --- Configuration Constants ---
-# Define directories for data and output
+ 
+ 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "raw_data"
 OUTPUT_DIR = BASE_DIR / "processed_data"
 LOG_DIR = BASE_DIR / "logs"
 
-# Ensure output directories exist
+ 
 OUTPUT_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
 
-# --- Algorithm Parameters ---
-# You can adjust these values to make the event detection more or less sensitive.
+ 
+ 
 
-# Rolling window size for smoothing data (e.g., '300s' for 5 minutes)
-# A larger window makes the baseline smoother but might miss short spikes.
+ 
+ 
 SMOOTHING_WINDOW = '300s'
 
-# Multiplier for standard deviation to set the flux threshold.
-# A lower value (e.g., 2.0 or 2.5) will make the detection MORE sensitive and find smaller events.
-# A higher value (e.g., 3.5 or 4.0) will make it LESS sensitive and only find very large events.
-FLUX_STD_MULTIPLIER = 2.5  # Lowered from 3.0 to increase sensitivity
+ 
+ 
+ 
+FLUX_STD_MULTIPLIER = 2.5   
 
-# Minimum duration for an event to be considered significant.
-# Lowering this value might help detect shorter-lived events.
+ 
+ 
 MIN_EVENT_DURATION_MINUTES = 5
 
-# Chunk size for reading large files to manage memory
+ 
 CHUNK_SIZE = 10000
 
 
@@ -43,11 +43,11 @@ def find_variable(info, common_names):
     Dynamically finds the most likely variable from a list of common names.
     Works for both CDF info objects and netCDF variable lists.
     """
-    # Case-insensitive check
+     
     info_vars_lower = [str(v).lower() for v in info]
     for name in common_names:
         if name.lower() in info_vars_lower:
-            # Find the original-case name
+             
             for original_name in info:
                 if str(original_name).lower() == name.lower():
                     return original_name
@@ -64,7 +64,7 @@ def load_cdf_data(path):
             cdf_info = cdf.cdf_info()
             all_vars = cdf_info.zVariables + cdf_info.rVariables
             
-            # Finalized list of all known time and data variables
+             
             time_var_names = ['epoch_for_cdf', 'epoch_for_cdf_mod', 'obs_time', 'Epoch', 'time']
             flux_var_names = ['proton_density', 'THA-1_spec', 'THA-2_spec', 'integrated_flux_mod', 'Flux']
 
@@ -77,13 +77,13 @@ def load_cdf_data(path):
                  raise ValueError("Could not find a recognizable flux/density/spec variable.")
 
             var_info = cdf.varinq(flux_var_name)
-            # Correctly access the Last_Rec attribute directly
+             
             num_records = var_info.Last_Rec + 1
 
             all_epoch_data = []
             all_flux_data = []
 
-            # Read and process the file in chunks to manage memory
+             
             for start_rec in range(0, num_records, CHUNK_SIZE):
                 end_rec = min(start_rec + CHUNK_SIZE, num_records)
                 if start_rec >= end_rec: continue
@@ -93,7 +93,7 @@ def load_cdf_data(path):
 
                 if flux_chunk is None or epoch_chunk is None: continue
 
-                # --- Robustly handle multi-dimensional data ---
+                 
                 if flux_chunk.ndim > 1:
                     sum_axes = tuple(range(1, flux_chunk.ndim))
                     flux_1d = np.sum(flux_chunk, axis=sum_axes)
@@ -142,7 +142,7 @@ def load_nc_data(path):
 
             time_var_name = find_variable(nc_vars, ['time'])
             
-            # Find the component variables
+             
             bx_var_name = find_variable(nc_vars, ['Bx_gse'])
             by_var_name = find_variable(nc_vars, ['By_gse'])
             bz_var_name = find_variable(nc_vars, ['Bz_gse'])
@@ -151,25 +151,25 @@ def load_nc_data(path):
                 raise ValueError("Could not find all required variables (time, Bx_gse, By_gse, Bz_gse).")
 
             time_var = nc.variables[time_var_name]
-            # Handle different time units gracefully
+             
             if 'unix' in time_var.units.lower():
                  times_pd = pd.to_datetime(time_var[:], unit='s')
             else:
                  times = netCDF4.num2date(time_var[:], units=time_var.units)
                  times_pd = pd.to_datetime(times)
 
-            # Load components
+             
             bx = nc.variables[bx_var_name][:]
             by = nc.variables[by_var_name][:]
             bz = nc.variables[bz_var_name][:]
 
-            # Calculate the magnitude of the magnetic field vector
+             
             flux_data = np.sqrt(bx**2 + by**2 + bz**2)
 
             df = pd.DataFrame(index=times_pd)
             df['Flux'] = flux_data
             
-            # Use the fill value from one of the components to clean data
+             
             if hasattr(nc.variables[bx_var_name], '_FillValue'):
                 fill_val = nc.variables[bx_var_name]._FillValue
                 df.replace(fill_val, np.nan, inplace=True)
@@ -200,10 +200,10 @@ def load_all_data(directory):
     print(f"Found {total_files} files to process.")
 
     for i, path in enumerate(files_to_process):
-        # Progress indicator
+         
         print(f"--> Processing file {i+1}/{total_files}: {path.name}")
         df = None
-        # Treat all files with .nc extension as NetCDF, others as CDF
+         
         if path.suffix.lower() == '.nc':
             df = load_nc_data(path)
         else:
@@ -246,10 +246,10 @@ def detect_cme_events(df):
         print("DataFrame is empty or 'Flux' column is missing. Skipping event detection.")
         return df, []
 
-    # Create a copy to avoid SettingWithCopyWarning
+     
     df_filled = df.copy()
     
-    # Updated fillna method to avoid FutureWarning
+     
     df_filled['Flux'] = df_filled['Flux'].ffill()
     df_filled['Flux'] = df_filled['Flux'].bfill()
 
@@ -274,7 +274,7 @@ def detect_cme_events(df):
     event_start_time = None
     
     print("Detecting events...")
-    # Find contiguous blocks of time where 'is_event' is True
+     
     for timestamp, row in df_processed.iterrows():
         if row['is_event'] and not in_event:
             in_event = True
